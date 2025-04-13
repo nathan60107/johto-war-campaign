@@ -1,0 +1,232 @@
+--
+-- UTILS START
+--
+
+MODULE_LANGUAGE_TAG = "Module Language"
+
+CLIMATE_TAGS = {"Cold", "Temperate", "Warm"}
+BIOME_TAGS = {"Plains", "Forest", "Mountain", "Ocean"}
+ENCOUNTER_TAGS = {"Weak", "Moderate", "Strong", "Legendary", "Distortion", "Secret"}
+
+function load_module(module_tag)
+  local modules = getObjectsWithTag(module_tag)
+  if len(modules) > 1 then
+    print('More than one module with tag "' .. module_tag .. '".')
+    return
+  elseif len(modules) == 0 then
+    print('Missing a module with tag "' .. module_tag .. '".')
+    return
+  end
+  local module = modules[1]
+  return module:getTable("vars")
+end
+
+function dummy_button() end
+
+function len(t)
+  l = 0
+  for _, _ in pairs(t) do
+    l = l + 1
+  end
+  return l
+end
+
+function get_keys(t)
+  local keys = {}
+  for key, _ in pairs(t) do
+    table.insert(keys, key)
+  end
+  return keys
+end
+
+function find_first_index(t, value)
+  for i, value_ in pairs(t) do
+    if value_ == value then
+      return i
+    end
+  end
+end
+
+function contains(t, value)
+  local first_index = find_first_index(t, value)
+  return first_index != nil
+end
+
+function get_max_key_and_value(t)
+  local key, max = nil, -math.huge
+  for k, v in pairs(t) do
+      if t[k] > max then
+          key, max = k, v
+      end
+  end
+  return key, max
+end
+
+local function reversedipairsiter(t, i)
+  i = i - 1
+  if i ~= 0 then return i, t[i] end
+end
+function reversedipairs(t) return reversedipairsiter, t, #t + 1 end
+
+function shuffle(t)
+  shuffled = {}
+  for i, value in ipairs(t) do
+  	local j = math.random(1, #shuffled + 1)
+  	table.insert(shuffled, j, value)
+  end
+  return shuffled
+end
+
+function get_object_infos_from_zone_deck(zone, shuffle)
+  local object_infos = {}
+  for _, zone_deck in pairs(zone:getObjects()) do
+    if zone_deck.type == "Card" then
+      table.insert(object_infos, {
+        description = zone_deck:getDescription(),
+        gm_notes = zone_deck:getGMNotes(),
+        guid = zone_deck:getGUID(),
+        index = 1,
+        lua_script = zone_deck:getLuaScript(),
+        lua_script_state = zone_deck.script_state,
+        memo = zone_deck.memo,
+        name = zone_deck:getName(),
+        tags = zone_deck:getTags()
+      })
+    elseif zone_deck.type == "Deck" then
+      if shuffle then zone_deck:randomize() end
+      for _, object_info in pairs(zone_deck:getObjects()) do
+        table.insert(object_infos, object_info)
+      end
+    end
+  end
+  return object_infos
+end
+
+function take_object_from_zone_deck(zone, params)
+  for _, zone_deck in pairs(zone:getObjects()) do
+    if zone_deck.type == "Card" and zone_deck:getGUID() == params.guid then
+      zone_deck:setPosition(params.position)
+      zone_deck:setRotation(params.rotation)
+      return zone_deck
+    elseif zone_deck.type == "Deck" then
+      for _, card in pairs(zone_deck:getObjects()) do
+        if card.guid == params.guid then
+          return zone_deck:takeObject(params)
+        end
+      end
+    end
+  end
+end
+
+function get_biome_tag(tags)
+  for _, tag in pairs(tags) do
+    if contains(BIOME_TAGS, tag) then
+      return tag
+    end
+  end
+end
+
+function get_climate_tag(tags)
+  for _, tag in pairs(tags) do
+    if contains(CLIMATE_TAGS, tag) then
+      return tag
+    end
+  end
+end
+
+function get_encounter_tag(tags)
+  for _, encounter_tag in pairs(ENCOUNTER_TAGS) do
+    local full_encounter_tag = encounter_tag .. " Encounter Card"
+    if contains(tags, full_encounter_tag) then
+      return full_encounter_tag
+    end
+  end
+end
+
+function brief_pause()
+  for i = 0, 25 do
+    coroutine.yield(0)
+  end
+end
+
+function signed_label(value)
+  if not value then return nil end
+  return (value >= 0) and "+" .. value or value
+end
+
+function update_panels(zone)
+  for _, update_panel_guid in pairs(zone:getVar("update_panel_guids")) do
+    local update_panel = getObjectFromGUID(update_panel_guid)
+    if update_panel then
+      update_panel:call("update_panel")
+    end
+  end
+end
+
+function get_next_state(current_state, total_states, alt_click)
+  if not current_state then
+    return 1
+  end
+  local state_step = not alt_click and 1 or -1
+  return ((current_state - 1 + state_step) % total_states) + 1
+end
+
+function round(value)
+  return math.floor(value + 0.5)
+end
+
+function get_trainer_token(player_colour)
+  local trainer_tokens = getObjectsWithTag("Trainer Token")
+  for _, trainer_token in pairs(trainer_tokens) do
+    local trainer_colour = trainer_token:getGMNotes()
+    if trainer_colour == player_colour then
+      return trainer_token
+    end
+  end
+  print('Could not find trainer token for player colour "' .. player_colour .. '".')
+end
+
+function get_object(zone)
+  local objects = zone:getObjects()
+  for _, object in pairs(objects) do
+    return object
+  end
+end
+
+function get_x_dir(obj)
+  return round(math.cos(math.rad(obj:getRotation().x)))
+end
+
+function get_y_dir(obj)
+  return round(math.cos(math.rad(obj:getRotation().y)))
+end
+
+function get_z_dir(obj)
+  return round(math.cos(math.rad(obj:getRotation().z)))
+end
+
+function flip_object(obj)
+  local height = obj:getBounds().size.y
+  local new_pos = Vector(obj:getPosition().x, obj:getPosition().y + height * get_z_dir(obj), obj:getPosition().z)
+  obj:setPosition(new_pos)
+  local new_rot = obj:getRotation() + Vector(0, 0, 180)
+  obj:setRotation(new_rot)
+end
+
+function double_check_then(condition, f)
+  if not condition() then
+    return false
+  end
+  function double_check_coroutine()
+    brief_pause()
+    if condition() then
+      f()
+    end
+    return 1
+  end
+  startLuaCoroutine(self, "double_check_coroutine")
+end
+
+--
+-- UTILS END
+--

@@ -1,0 +1,105 @@
+MODEL_BAG_GUIDS = {"83e57d", "fa1523", "08537d", "b6f5ec", "2c54b8", "806018", "f5e4cc"}
+ZONE_GUID = "508fa3"
+TARGET_GUID = "2a7ed2"
+FINAL_ZONE_GUID = "5446c7"
+FINAL_TARGET_GUID = "a9a0db"
+SIZE_TO_SCALE = {S=1.8, M=1.4, L=1.2, H=1.0, G=0.8, C=0.6}
+
+function onload()
+  self.createButton({
+    click_function = "transfer_models",
+    function_owner = self,
+    position       = {0, 0.25, -0.25},
+    label          = "Transfer\nModels",
+    width          = 500,
+    height         = 250,
+    font_size      = 100
+  })
+  self.createButton({
+    click_function = "cache_models",
+    function_owner = self,
+    position       = {0, 0.25, 0.25},
+    label          = "Cache\nModels",
+    width          = 500,
+    height         = 250,
+    font_size      = 100
+  })
+end
+
+--
+--
+--
+
+function transfer_models()
+  function run()
+    transfer(MODEL_BAG_GUIDS, TARGET_GUID)
+    return 1
+  end
+  startLuaCoroutine(self, "run")
+end
+
+function transfer(model_bag_guids, target_guid)
+  local zone = getObjectFromGUID(ZONE_GUID)
+  for _, model_bag_guid in ipairs(model_bag_guids) do
+    local model_bag = getObjectFromGUID(model_bag_guid)
+    for _, contained_object in ipairs(model_bag:getObjects()) do
+      model_bag:takeObject({
+        position = zone:getPosition(),
+        guid = contained_object.guid,
+        callback_function = function(model) transfer_callback(model, target_guid) end
+      })
+      wait(0.05)
+    end
+  end
+end
+
+function transfer_callback(model, target_guid)
+  local target = getObjectFromGUID(target_guid)
+  model:setCustomObject({type=1})
+  model:addTag("Pokemon Model")
+  model:setLuaScript()
+  local _, _, size = string.find(model:getGMNotes(), "Size=|(%a)|")
+  local scale = SIZE_TO_SCALE[size]
+  model:setScale(Vector(scale, scale, scale))
+  model:setGMNotes()
+  target:putObject(model)
+end
+
+--
+--
+--
+
+function cache_models()
+  function run()
+    cache(TARGET_GUID)
+    return 1
+  end
+  startLuaCoroutine(self, "run")
+end
+
+function cache(target_guid)
+  local zone = getObjectFromGUID(FINAL_ZONE_GUID)
+  local model_bag = getObjectFromGUID(target_guid)
+  for _, contained_object in ipairs(model_bag:getObjects()) do
+    model_bag:takeObject({
+      position = zone:getPosition(),
+      guid = contained_object.guid,
+      callback_function = function(model) cache_callback(model, FINAL_TARGET_GUID) end
+    })
+    wait(0.05)
+  end
+end
+
+function cache_callback(model, final_target_guid)
+  local target = getObjectFromGUID(final_target_guid)
+  target:putObject(model)
+end
+
+--
+--
+--
+
+function wait(time)
+    local start = os.time()
+    repeat coroutine.yield(0) until os.time() > start + time
+end
